@@ -40,11 +40,6 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
     if url.host.match(EXCLUDED_HOSTS)
       return four_oh_four(resp, "Hitting excluded hostnames")
 
-    src = Http.createClient url.port || 80, url.hostname
-
-    src.on 'error', (error) ->
-      four_oh_four(resp, "Client Request error #{error.stack}")
-
     query_path = url.pathname
     if url.query?
       query_path += "?#{url.query}"
@@ -53,7 +48,14 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
 
     log transferred_headers
 
-    srcReq = src.request 'GET', query_path, transferred_headers
+    srcReq = Http.request
+      host    : url.hostname
+      port    : url.port || 80
+      path    : query_path
+      headers : transferred_headers
+
+    srcReq.on 'error', (error) ->
+      four_oh_four(resp, "Client Request error #{error.stack}")
 
     srcReq.on 'response', (srcResp) ->
       is_finished = true
@@ -66,8 +68,9 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
         four_oh_four(resp, "Content-Length exceeded")
       else
         newHeaders =
-          'content-type'           : srcResp.headers['content-type']
-          'cache-control'          : srcResp.headers['cache-control'] || 'public, max-age=31536000'
+          'Content-Type'           : srcResp.headers['content-type']
+          'Date'                   : srcResp.headers['date'] || new Date
+          'Cache-control'          : srcResp.headers['cache-control'] || 'public, max-age=31536000'
           'Camo-Host'              : camo_hostname
           'X-Content-Type-Options' : 'nosniff'
 
@@ -78,6 +81,10 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
           newHeaders['transfer-encoding'] = srcResp.headers['transfer-encoding']
         if srcResp.headers['content-encoding']
           newHeaders['content-encoding'] = srcResp.headers['content-encoding']
+        if srcResp.headers['last-modified-date']
+          newHeaders['last-modified-date'] = srcResp.headers['last-modified-date']
+        if srcResp.headers['etag']
+          newHeaders['etag'] = srcResp.headers['etag']
 
         srcResp.on 'end', ->
           if is_finished
@@ -146,10 +153,14 @@ server = Http.createServer (req, resp) ->
     transferred_headers =
       'Via'                    : user_agent
       'User-Agent'             : user_agent
-      'Accept'                 : req.headers.accept ? 'image/*'
-      'Accept-Encoding'        : req.headers['accept-encoding']
+      'Accept'                 : 'image/*'
       'x-forwarded-for'        : req.headers['x-forwarded-for']
       'x-content-type-options' : 'nosniff'
+
+    if req.headers['if-modified-since']?
+      transferred_headers['If-Modified-Since'] = req.headers['if-modified-since']
+    if req.headers['if-none-match']?
+      transferred_headers['If-None-Match'] = req.headers['if-none-match']
 
     delete(req.headers.cookie)
 
