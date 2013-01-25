@@ -5,7 +5,7 @@ Crypto      = require 'crypto'
 QueryString = require 'querystring'
 
 port            = parseInt process.env.PORT        || 8081
-version         = "1.0.5"
+version         = "1.0.5-adn"
 excluded        = process.env.CAMO_HOST_EXCLUSIONS || '*.example.org'
 shared_key      = process.env.CAMO_KEY             || '0x24FEEDFACEDEADBEEFCAFE'
 max_redirects   = process.env.CAMO_MAX_REDIRECTS   || 4
@@ -153,7 +153,7 @@ server = Http.createServer (req, resp) ->
     transferred_headers =
       'Via'                    : user_agent
       'User-Agent'             : user_agent
-      'Accept'                 : 'image/*'
+      'Accept'                 : 'image/*;q=0.9,*/*;q=0.8'
       'x-forwarded-for'        : req.headers['x-forwarded-for']
       'x-content-type-options' : 'nosniff'
 
