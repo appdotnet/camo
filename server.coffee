@@ -40,19 +40,15 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
     if url.host.match(EXCLUDED_HOSTS)
       return four_oh_four(resp, "Hitting excluded hostnames")
 
-    query_path = url.pathname
-    if url.query?
-      query_path += "?#{url.query}"
-
     transferred_headers.host = url.host
 
     log transferred_headers
 
     srcReq = Http.request
-      host    : url.hostname
-      port    : url.port || 80
-      path    : query_path
-      headers : transferred_headers
+      hostname : url.hostname
+      port     : url.port || 80
+      path     : url.path
+      headers  : transferred_headers
 
     srcReq.on 'error', (error) ->
       four_oh_four(resp, "Client Request error #{error.stack}")
@@ -107,14 +103,24 @@ process_url = (url, transferred_headers, resp, remaining_redirects) ->
             if remaining_redirects <= 0
               four_oh_four(resp, "Exceeded max depth")
             else
-              is_finished = false
               newUrl = Url.parse srcResp.headers['location']
+              send_parsed = false
+
               unless newUrl.host? and newUrl.hostname?
                 newUrl.host = newUrl.hostname = url.hostname
                 newUrl.protocol = url.protocol
+                send_parsed = true
 
-              console.log newUrl
-              process_url newUrl, transferred_headers, resp, remaining_redirects - 1
+              if newUrl.protocol is 'https:'
+                if send_parsed
+                  newHeaders['location'] = Url.format newUrl
+                else
+                  newHeaders['location'] = srcResp.headers['location']
+
+                resp.writeHead srcResp.statusCode, newHeaders
+              else
+                is_finished = false
+                process_url newUrl, transferred_headers, resp, remaining_redirects - 1
           when 304
             resp.writeHead srcResp.statusCode, newHeaders
           else
